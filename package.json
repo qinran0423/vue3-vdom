@@ -1,0 +1,17 @@
+{
+  "name": "VDOM",
+  "version": "1.0.0",
+  "description": "学习vdom  diff算法",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "watch": "jest --watchAll",
+    "coverage": "jest --coverage"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "jest": "^27.5.1"
+  }
+}
