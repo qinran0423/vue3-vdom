@@ -29,7 +29,9 @@ exports.diffArray = (c1, c2, { mountElement, patch, unmount, move }) => {
   let e1 = l1 - 1 // 老节点最后一个节点的索引
   let e2 = l2 - 1 // 新节点最后一个节点的索引
 
-  // 1. 从左到右一直查找新老是够可以复用， 如果不可以则停止循环
+
+
+  // 1. 从左边查找 
   while (i <= e1 && i <= e2) {
     const n1 = c1[i]
     const n2 = c2[i]
@@ -41,7 +43,8 @@ exports.diffArray = (c1, c2, { mountElement, patch, unmount, move }) => {
     i++
   }
 
-  // 2. 从右到左一直查找新老是够可以复用， 如果不可以则停止循环
+
+  // 2. 从右边开始查找
   while (i <= e1 && i <= e2) {
     const n1 = c1[e1]
     const n2 = c2[e2]
@@ -50,11 +53,13 @@ exports.diffArray = (c1, c2, { mountElement, patch, unmount, move }) => {
     } else {
       break
     }
+
     e1--
     e2--
   }
 
-  // 3-1 老节点没了  新节点有
+
+  // 3. 老节点没有了， 新节点在 则新增
   if (i > e1) {
     if (i <= e2) {
       while (i <= e2) {
@@ -65,7 +70,7 @@ exports.diffArray = (c1, c2, { mountElement, patch, unmount, move }) => {
     }
   }
 
-  // 3-2 老节点存在  新节点没有
+  // 4. 老节点存在  新节点没有 则移除
   else if (i > e2) {
     if (i <= e1) {
       while (i <= e1) {
@@ -74,87 +79,97 @@ exports.diffArray = (c1, c2, { mountElement, patch, unmount, move }) => {
         i++
       }
     }
-  } else {
-    // 4 新老节点都有，但是顺序不稳定，乱
+  }
 
-    // 4-1 把新元素做成map， key: value(索引)
+  // 5. 新老节点都有， 顺序不稳定
+  else {
+
     const s1 = i
     const s2 = i
 
+
+    // 剩下的就是中间乱序的数组进行对比，
+    // 1.暴力解法 则双重遍历  时间复杂度 O(n)
+    // 2.构建一个map映射表 每次遍历老的节点去这个映射表中去查找
     const keyToNewIndexMap = new Map()
+
+    // {
+    //   e: 2,
+    //   c: 3,
+    //   d: 4, 
+    //   h: 5
+    // }
     for (i = s2; i <= e2; i++) {
       const nextChild = c2[i]
       keyToNewIndexMap.set(nextChild.key, i)
     }
-    // 记录新节点有多少个还没处理
+
+    // 记录新节点有多少个需要处理
     const toBePatched = e2 - s2 + 1
     let patched = 0
 
-    // 4-2  记录一下新老元素的相对下标 
+    // 构建一个数组记录一下老的节点在新节点中的位置
     const newIndexToOldIndexMap = new Array(toBePatched)
 
     // 数组的下标记录的是新元素的相对下标
-    // 数组的值如果是0 证明这个值得新元素是要新增的
+    // 数据的值如果是0 证明这个值是需要新增的
+    // [5, 3, 4, 0]
     for (let i = 0; i < toBePatched; i++) {
       newIndexToOldIndexMap[i] = 0
     }
 
-    // 4-3 遍历老节点 去map图查找节点 确定是复用还是删除
     let moved = false
     let maxNewIndexSoFar = 0
 
+    // 遍历老节点， 去map图中查找节点，确定是复用还是删除
     for (i = s1; i <= e1; i++) {
       const prevChild = c1[i]
-      if (patched >= toBePatched) {
-        unmount(prevChild.key)
-        continue
-      }
+      // newIndex 老节点在新节点中对应的索引
       const newIndex = keyToNewIndexMap.get(prevChild.key)
 
+      // 如果老的节点在map图中没有找到，说明这个节点需要移除
       if (newIndex === undefined) {
-        //没有找到要复用的节点，则删除
         unmount(prevChild.key)
       } else {
-        // maxNewIndexSoFar 记录队伍最后一个元素的下标 
+
+        // maxNewIndexSoFar记录队伍最后一个元素的下标
         if (newIndex >= maxNewIndexSoFar) {
           maxNewIndexSoFar = newIndex
         } else {
           moved = true
         }
-        // 找到了节点需要被复用
-        // 一旦元素可以复用 newIndexToOldIndexMap对应的相对位置 更新更老元素的下标+1
+
+        // 如果老的节点在map图中找到了，则说明这个节点可以复用
         newIndexToOldIndexMap[newIndex - s2] = i + 1
         patch(prevChild.key)
         patched++
       }
     }
 
-    // 4-3 遍历新元素 新增 或 移动
 
+    // 遍历新元素 确定是新增还是移动
     // 获取最长递增子序列
+    // [1,2]
     const increasingNewIndexSequence = moved ? getSequence(newIndexToOldIndexMap) : []
     let lastIndex = increasingNewIndexSequence.length - 1
-    for (i = toBePatched - 1; i >= 0; i--) {
-      // i 是新元素的相对下标
-      const nextChild = c2[s2 + i]
 
-      // 判断节点是新增 还是 移动
+    for (i = toBePatched - 1; i >= 0; i--) {
+      // i是最新元素的相对下标
+      const newChild = c2[s2 + i]
+      // 判断节点是新增还是移动
       if (newIndexToOldIndexMap[i] === 0) {
-        mountElement(nextChild.key)
+        mountElement(newChild.key)
       } else {
-        // 可能需要移动  最长递增子序列
         if (lastIndex < 0 || i !== increasingNewIndexSequence[lastIndex]) {
-          move(nextChild.key)
+          move(newChild.key)
         } else {
           lastIndex--
         }
       }
-
     }
+
+
   }
-
-
-
 
   // 返回不需要移动的节点
   // 得到最长递增子序列lis（算法+实际应用，跳过0），返回路径
