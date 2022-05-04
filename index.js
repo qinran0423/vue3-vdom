@@ -29,37 +29,35 @@ exports.diffArray = (c1, c2, { mountElement, patch, unmount, move }) => {
   let e1 = l1 - 1 // 老节点最后一个节点的索引
   let e2 = l2 - 1 // 新节点最后一个节点的索引
 
-
-
-  // 1. 从左边查找 
+  // 1.从左边开始查找
   while (i <= e1 && i <= e2) {
-    const n1 = c1[i]
-    const n2 = c2[i]
-    if (isSameVnodeType(n1, n2)) {
+    const n1 = c1[i] // 获取老节点
+    const n2 = c2[i] // 获取新节点
+    if (isSameVnodeType(n1, n2)) { //如果新老节点是相同的节点
+      // patch
       patch(n1.key)
     } else {
-      break
+      break;
     }
     i++
   }
 
 
-  // 2. 从右边开始查找
+  // 2.从右边开始查找
   while (i <= e1 && i <= e2) {
-    const n1 = c1[e1]
-    const n2 = c2[e2]
-    if (isSameVnodeType(n1, n2)) {
+    const n1 = c1[e1] // 获取老节点
+    const n2 = c2[e2] // 获取新节点
+    if (isSameVnodeType(n1, n2)) { //如果新老节点是相同的节点
+      // patch
       patch(n1.key)
     } else {
-      break
+      break;
     }
-
     e1--
     e2--
   }
 
-
-  // 3. 老节点没有了， 新节点在 则新增
+  // 3.老节点没有了  新节点存在  则新增
   if (i > e1) {
     if (i <= e2) {
       while (i <= e2) {
@@ -69,8 +67,7 @@ exports.diffArray = (c1, c2, { mountElement, patch, unmount, move }) => {
       }
     }
   }
-
-  // 4. 老节点存在  新节点没有 则移除
+  // 4.老节点存在  新节点没有  则删除
   else if (i > e2) {
     if (i <= e1) {
       while (i <= e1) {
@@ -81,80 +78,75 @@ exports.diffArray = (c1, c2, { mountElement, patch, unmount, move }) => {
     }
   }
 
-  // 5. 新老节点都有， 顺序不稳定
+  // 5.新老节点都有  顺序不稳定
   else {
-
     const s1 = i
     const s2 = i
-
-
-    // 剩下的就是中间乱序的数组进行对比，
-    // 1.暴力解法 则双重遍历  时间复杂度 O(n)
-    // 2.构建一个map映射表 每次遍历老的节点去这个映射表中去查找
+    // 剩下的就是中间乱序的数组进行遍历
+    // 1. 暴力解法  双重遍历， 时间复杂度O(n^2)
+    // 2. 构建一个map映射表 每次遍历老的节点去这个映射表中查找
     const keyToNewIndexMap = new Map()
-
+    // 大概就是这个样子
     // {
     //   e: 2,
     //   c: 3,
-    //   d: 4, 
+    //   d: 4,
     //   h: 5
     // }
     for (i = s2; i <= e2; i++) {
       const nextChild = c2[i]
       keyToNewIndexMap.set(nextChild.key, i)
     }
+    console.log(keyToNewIndexMap);
 
-    // 记录新节点有多少个需要处理
+
+    // 记录新节点有多少个需要处理的
     const toBePatched = e2 - s2 + 1
-    let patched = 0
+    let patched = 0 //记录老节点有多少个复用
+    // 构建一个数组记录一下在新节点的位置 在老节点中的位置
+    const newIndexToOldIndexMap = new Array(toBePatched).fill(0)
 
-    // 构建一个数组记录一下老的节点在新节点中的位置
-    const newIndexToOldIndexMap = new Array(toBePatched)
-
-    // 数组的下标记录的是新元素的相对下标
-    // 数据的值如果是0 证明这个值是需要新增的
-    // [5, 3, 4, 0]
-    for (let i = 0; i < toBePatched; i++) {
-      newIndexToOldIndexMap[i] = 0
-    }
+    // 数组的下标是新节点元素的相对下标
+    // 数组的值如果是0 证明这个值是需要新增的
+    // 否则就是新节点在老节点的位置
+    // console.log(newIndexToOldIndexMap);
 
     let moved = false
     let maxNewIndexSoFar = 0
 
-    // 遍历老节点， 去map图中查找节点，确定是复用还是删除
+    // 遍历老的节点 去map图中查找 老的节点在新的节点中对应的位置
     for (i = s1; i <= e1; i++) {
       const prevChild = c1[i]
-      // newIndex 老节点在新节点中对应的索引
       const newIndex = keyToNewIndexMap.get(prevChild.key)
-
-      // 如果老的节点在map图中没有找到，说明这个节点需要移除
-      if (newIndex === undefined) {
+      // 如果老的节点在map中没有找到说明这个节点需要移除
+      if (!newIndex) {
         unmount(prevChild.key)
       } else {
 
-        // maxNewIndexSoFar记录队伍最后一个元素的下标
         if (newIndex >= maxNewIndexSoFar) {
           maxNewIndexSoFar = newIndex
         } else {
           moved = true
         }
 
-        // 如果老的节点在map图中找到了，则说明这个节点可以复用
+        //如果老的节点在map中找到了 则说明这个节点可以复用
+        //然后在newIndexToOldIndexMap中记录老节点在新节点中的位置
+        // 为什么要+1？
+        // 索引是从0开始的  newIndexToOldIndexMap 中的值为0 代表新增
         newIndexToOldIndexMap[newIndex - s2] = i + 1
         patch(prevChild.key)
         patched++
       }
     }
-
-
-    // 遍历新元素 确定是新增还是移动
+    // e c d h
+    // [5,3,4,0]
     // 获取最长递增子序列
-    // [1,2]
+    [1, 2]
     const increasingNewIndexSequence = moved ? getSequence(newIndexToOldIndexMap) : []
     let lastIndex = increasingNewIndexSequence.length - 1
 
+    // Dom  操作 insertBefore  所以从右向左遍历
     for (i = toBePatched - 1; i >= 0; i--) {
-      // i是最新元素的相对下标
       const newChild = c2[s2 + i]
       // 判断节点是新增还是移动
       if (newIndexToOldIndexMap[i] === 0) {
@@ -167,9 +159,13 @@ exports.diffArray = (c1, c2, { mountElement, patch, unmount, move }) => {
         }
       }
     }
-
-
   }
+
+
+
+
+
+
 
   // 返回不需要移动的节点
   // 得到最长递增子序列lis（算法+实际应用，跳过0），返回路径
